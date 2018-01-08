@@ -1,31 +1,144 @@
 def refactor(order):
+
+	def controlTurn(use_motor):
+		tmp = ""
+		if(use_motor == 'A' or use_motor == 'B'):
+			if(!F_holds_cube):
+				if(!C_is_vertical):
+					tmp += "C "
+					C_is_vertical = !C_is_vertical
+ 				if(!D_is_vertical):
+					tmp += "D "
+					D_is_vertical = !D_is_vertical
+				tmp += "f "
+				F_holds_cube = !F_holds_cube
+			else:
+				if(!C_is_vertical or D_is_vertical):
+					if(!E_holds_cube):
+						tmp += "e "
+						E_holds_cube = !E_holds_cube
+					tmp += "F "
+					F_holds_cube = !F_holds_cube
+					if(!C_is_vertical):
+						tmp += "C "
+						C_is_vertical = !C_is_vertical
+					if(!D_is_vertical):
+						tmp += "D "
+						D_is_vertical = !D_is_vertical
+					tmp += "f "
+					F_holds_cube = !F_holds_cube
+			if(!E_holds_cube):
+				tmp += "e "
+				E_holds_cube = !E_holds_cube
+						
+		elif(use_motor == 'C' or use_motor == 'D'):
+			if(!E_holds_cube):
+				if(!A_is_vertical):
+					tmp += "A "
+					A_is_vertical = !A_is_vertical
+ 				if(!B_is_vertical):
+					tmp += "B "
+					B_is_vertical = !B_is_vertical
+				tmp += "e "
+				E_holds_cube = !E_holds_cube
+			else:
+				if(!A_is_vertical or B_is_vertical):
+					if(!F_holds_cube):
+						tmp += "f "
+						F_holds_cube = !F_holds_cube
+					tmp += "E "
+					if(!A_is_vertical):
+						tmp += "A "
+						A_is_vertical = !A_is_vertical
+					if(!B_is_vertical):
+						tmp += "B "
+						B_is_vertical = !B_is_vertical
+					tmp += "e "
+					E_holds_cube = !E_holds_cube
+			if(!F_holds_cube):
+				tmp += "f "
+				F_holds_cube = !F_holds_cube
+		
+		return tmp
+
+	def controlRotate():
+		tmp = ""
+		if(!F_holds_cube):
+			if(!C_is_vertical):
+				tmp += "C "
+				C_is_vertical = !C_is_vertical
+			if(!D_is_vertical):
+				tmp += "D "
+				D_is_vertical = !D_is_vertical
+			tmp += "f "
+			F_holds_cube = !F_holds_cube
+		if(E_holds_cube):
+			tmp += "E "
+			E_holds_cube = !E_holds_cube
+		return tmp
+
 	commands = ""
-	tmpCom = ''
-	tmpChange = ''
+	tmpCom = ""
+	tmpChange = ""
+	A_is_vertical = True	
+	B_is_vertical = True
+	C_is_vertical = True
+	D_is_vertical = True
+	E_holds_cube = True
+	F_holds_cube = True
 	for i in range(len(order)):
 		tmp = order[i]
 		if(tmp == 'R'):
-			tmpCom = 'C'	
+			tmpCom += controlTurn('C')
+			tmpCom += "C"	
+			C_is_vertical = !C_is_vertical
 		elif(tmp == 'L'):
-			tmpCom = 'D'	
+			tmpCom += controlTurn('D')
+			tmpCom += "D"	
+			D_is_vertical = !D_is_vertical
 		elif(tmp == 'F'):
-			tmpCom = 'A'
+			tmpCom += controlTurn('A')
+			tmpCom += "A"
+			A_is_vertical = !A_is_vertical
 		elif(tmp == 'B'):
-			tmpCom = 'B'
+			tmpCom += controlTurn('B')
+			tmpCom += "B"
+			B_is_vertical = !B_is_vertical
 		elif(tmp == 'U' or tmp == 'D'):
-			tmpChange = "E c D e "
+			tmpChange += controlRotate()
+			tmpChange += "E cD e "
+			D_is_vertical = !D_is_vertical
+			C_is_vertical = !C_is_vertical
 			if(tmp == 'U'):
-				tmpCom = 'A'
+				tmpCom += controlTurn('A')
+				tmpCom += "A"
+				A_is_vertical = !A_is_vertical
 			else:
-				tmpCom = 'B'
-		elif(tmp == '1'):
-			print("still working")
+				tmpCom += controlTurn('B')
+				tmpCom += "B"
+				B_is_vertical = !B_is_vertical
 		elif(tmp == '2'):
-			tmpCom += '2'
+			tmpCom += "2"
+			if(tmpCom[len(tmpCom)-1] == "A"):
+				A_is_vertical = !A_is_vertical		
+				if(tmpCom[len(tmpCom)-2] == "B"):
+ 					B_is_vertical = !B_is_vertical
+
+			elif(tmpCom[len(tmpCom)-1] == "B"):
+				B_is_vertical = !B_is_vertical
+
+			elif(tmpCom[len(tmpCom)-1] == "C"):
+				C_is_vertical = !C_is_vertical
+				if(tmpCom[len(tmpCom)-2] == "D"):
+					D_is_vertical = !D_is_vertical
+
+			elif(tmpCom[len(tmpCom)-1] == "D"):
+				D_is_vertical = !D_is_vertical
+
 		elif(tmp == '3'):
-			tmpCom = tmpCom.lower()
+			tmpCom[len(tmpCom) - 1] = tmpCom[len(tmpCom) - 1].lower()
 		elif(tmp == ' '):
-			if(len(tmpChange) != 0):
+			if(tmpChange != ""):
 				for j in range(i, len(order)):
 					if(order[j] == 'F'):
 						orderList = list(order)
@@ -47,8 +160,8 @@ def refactor(order):
 						print("transforming")			
 				tmpCom = tmpChange + tmpCom
 			commands += tmpCom + tmp
-			tmpCom = ''
-			tmpChange = ''
+			tmpCom = ""
+			tmpChange = ""
 		else:
-			print("unknown command")
+			tmpCom += "" 
 	return commands
