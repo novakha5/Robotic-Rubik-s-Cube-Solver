@@ -1,5 +1,6 @@
 def refactor(order):
 
+	#controls if it is save to do next move or if it is needed to do some preperations (gives such preparations)
 	def controlTurn(use_motor):
 		tmp = ""
 		if(use_motor == 'A' or use_motor == 'B'):
@@ -61,6 +62,7 @@ def refactor(order):
 		
 		return tmp
 
+	#check if it is save to rotate the cube
 	def controlRotate():
 		tmp = ""
 		if(!F_holds_cube):
@@ -86,6 +88,8 @@ def refactor(order):
 	D_is_vertical = True
 	E_holds_cube = True
 	F_holds_cube = True
+	
+	#takes given string and creates one for use in stm
 	for i in range(len(order)):
 		tmp = order[i]
 		if(tmp == 'R'):
@@ -139,6 +143,7 @@ def refactor(order):
 			tmpCom[len(tmpCom) - 1] = tmpCom[len(tmpCom) - 1].lower()
 		elif(tmp == ' '):
 			if(tmpChange != ""):
+				#for rotated cube makes change of layers
 				for j in range(i, len(order)):
 					if(order[j] == 'F'):
 						orderList = list(order)
