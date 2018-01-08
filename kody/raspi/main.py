@@ -1,5 +1,6 @@
 import colordetect as detect
 import classification_of_color as classify
+import refactor as ref
 import cv2
 import picamera
 import serial
@@ -61,5 +62,8 @@ with picamera.PiCamera() as camera:
     camera.stop_preview()
 
     string = classify.classify(color_arr)
-
-print(string)
+''' Zavolat algoritmus na vypocet tahu
+order = 
+commands = ref.refactor(order)
+usart.write(commands)
+'''
