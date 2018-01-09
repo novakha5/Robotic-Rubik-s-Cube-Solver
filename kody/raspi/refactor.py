@@ -4,79 +4,79 @@ def refactor(order):
 	def controlTurn(use_motor):
 		tmp = ""
 		if(use_motor == 'A' or use_motor == 'B'):
-			if(!F_holds_cube):
-				if(!C_is_vertical):
+			if(not F_holds_cube):
+				if(not C_is_vertical):
 					tmp += "C "
-					C_is_vertical = !C_is_vertical
- 				if(!D_is_vertical):
+					C_is_vertical = not C_is_vertical
+ 				if(not D_is_vertical):
 					tmp += "D "
-					D_is_vertical = !D_is_vertical
+					D_is_vertical = not D_is_vertical
 				tmp += "f "
-				F_holds_cube = !F_holds_cube
+				F_holds_cube = not F_holds_cube
 			else:
-				if(!C_is_vertical or D_is_vertical):
-					if(!E_holds_cube):
+				if(not C_is_vertical or D_is_vertical):
+					if(not E_holds_cube):
 						tmp += "e "
-						E_holds_cube = !E_holds_cube
+						E_holds_cube = not E_holds_cube
 					tmp += "F "
-					F_holds_cube = !F_holds_cube
-					if(!C_is_vertical):
+					F_holds_cube = not F_holds_cube
+					if(not C_is_vertical):
 						tmp += "C "
-						C_is_vertical = !C_is_vertical
-					if(!D_is_vertical):
+						C_is_vertical = not C_is_vertical
+					if(not D_is_vertical):
 						tmp += "D "
-						D_is_vertical = !D_is_vertical
+						D_is_vertical = not D_is_vertical
 					tmp += "f "
-					F_holds_cube = !F_holds_cube
-			if(!E_holds_cube):
+					F_holds_cube = not F_holds_cube
+			if(not E_holds_cube):
 				tmp += "e "
-				E_holds_cube = !E_holds_cube
+				E_holds_cube = not E_holds_cube
 						
 		elif(use_motor == 'C' or use_motor == 'D'):
-			if(!E_holds_cube):
-				if(!A_is_vertical):
+			if(not E_holds_cube):
+				if(not A_is_vertical):
 					tmp += "A "
-					A_is_vertical = !A_is_vertical
- 				if(!B_is_vertical):
+					A_is_vertical = not A_is_vertical
+ 				if(not B_is_vertical):
 					tmp += "B "
-					B_is_vertical = !B_is_vertical
+					B_is_vertical = not B_is_vertical
 				tmp += "e "
-				E_holds_cube = !E_holds_cube
+				E_holds_cube = not E_holds_cube
 			else:
-				if(!A_is_vertical or B_is_vertical):
-					if(!F_holds_cube):
+				if(not A_is_vertical or B_is_vertical):
+					if(not F_holds_cube):
 						tmp += "f "
-						F_holds_cube = !F_holds_cube
+						F_holds_cube = not F_holds_cube
 					tmp += "E "
-					if(!A_is_vertical):
+					if(not A_is_vertical):
 						tmp += "A "
-						A_is_vertical = !A_is_vertical
-					if(!B_is_vertical):
+						A_is_vertical = not A_is_vertical
+					if(not B_is_vertical):
 						tmp += "B "
-						B_is_vertical = !B_is_vertical
+						B_is_vertical = not B_is_vertical
 					tmp += "e "
-					E_holds_cube = !E_holds_cube
-			if(!F_holds_cube):
+					E_holds_cube = not E_holds_cube
+			if(not F_holds_cube):
 				tmp += "f "
-				F_holds_cube = !F_holds_cube
+				F_holds_cube = not F_holds_cube
 		
 		return tmp
 
 	#check if it is save to rotate the cube
 	def controlRotate():
 		tmp = ""
-		if(!F_holds_cube):
-			if(!C_is_vertical):
+		if(not F_holds_cube):
+			if(not C_is_vertical):
 				tmp += "C "
-				C_is_vertical = !C_is_vertical
-			if(!D_is_vertical):
+				C_is_vertical = not C_is_vertical
+			if(not D_is_vertical):
 				tmp += "D "
-				D_is_vertical = !D_is_vertical
+				D_is_vertical = not D_is_vertical
 			tmp += "f "
-			F_holds_cube = !F_holds_cube
+			F_holds_cube = not F_holds_cube
 		if(E_holds_cube):
 			tmp += "E "
-			E_holds_cube = !E_holds_cube
+			E_holds_cube = not E_holds_cube
 		return tmp
 
 	commands = ""
@@ -95,49 +95,49 @@ def refactor(order):
 		if(tmp == 'R'):
 			tmpCom += controlTurn('C')
 			tmpCom += "C"	
-			C_is_vertical = !C_is_vertical
+			C_is_vertical = not C_is_vertical
 		elif(tmp == 'L'):
 			tmpCom += controlTurn('D')
 			tmpCom += "D"	
-			D_is_vertical = !D_is_vertical
+			D_is_vertical = not D_is_vertical
 		elif(tmp == 'F'):
 			tmpCom += controlTurn('A')
 			tmpCom += "A"
-			A_is_vertical = !A_is_vertical
+			A_is_vertical = not A_is_vertical
 		elif(tmp == 'B'):
 			tmpCom += controlTurn('B')
 			tmpCom += "B"
-			B_is_vertical = !B_is_vertical
+			B_is_vertical = not B_is_vertical
 		elif(tmp == 'U' or tmp == 'D'):
 			tmpChange += controlRotate()
 			tmpChange += "E cD e "
-			D_is_vertical = !D_is_vertical
-			C_is_vertical = !C_is_vertical
+			D_is_vertical = not D_is_vertical
+			C_is_vertical = not C_is_vertical
 			if(tmp == 'U'):
 				tmpCom += controlTurn('A')
 				tmpCom += "A"
-				A_is_vertical = !A_is_vertical
+				A_is_vertical = not A_is_vertical
 			else:
 				tmpCom += controlTurn('B')
 				tmpCom += "B"
-				B_is_vertical = !B_is_vertical
+				B_is_vertical = not B_is_vertical
 		elif(tmp == '2'):
 			tmpCom += "2"
 			if(tmpCom[len(tmpCom)-1] == "A"):
-				A_is_vertical = !A_is_vertical		
+				A_is_vertical = not A_is_vertical		
 				if(tmpCom[len(tmpCom)-2] == "B"):
- 					B_is_vertical = !B_is_vertical
+ 					B_is_vertical = not B_is_vertical
 
 			elif(tmpCom[len(tmpCom)-1] == "B"):
-				B_is_vertical = !B_is_vertical
+				B_is_vertical = not B_is_vertical
 
 			elif(tmpCom[len(tmpCom)-1] == "C"):
-				C_is_vertical = !C_is_vertical
+				C_is_vertical = not C_is_vertical
 				if(tmpCom[len(tmpCom)-2] == "D"):
-					D_is_vertical = !D_is_vertical
+					D_is_vertical = not D_is_vertical
 
 			elif(tmpCom[len(tmpCom)-1] == "D"):
-				D_is_vertical = !D_is_vertical
+				D_is_vertical = not D_is_vertical
 
 		elif(tmp == '3'):
 			tmpCom[len(tmpCom) - 1] = tmpCom[len(tmpCom) - 1].lower()
@@ -167,6 +167,9 @@ def refactor(order):
 			commands += tmpCom + tmp
 			tmpCom = ""
 			tmpChange = ""
+		elif(tmp == '('):
+                        commands += "."
+                        return commands
 		else:
 			tmpCom += "" 
 	return commands

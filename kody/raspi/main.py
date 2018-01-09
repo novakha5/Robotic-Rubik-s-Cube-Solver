@@ -1,10 +1,14 @@
-import colordetect as detect
+import color_detect as detect
 import classification_of_color as classify
 import refactor as ref
 import cv2
 import picamera
 import serial
 import time
+import os
+from threading import Thread
+import subprocess
+import tempfile
 
 def saveToArr(color, j):
     for i in range(9):
@@ -30,50 +34,67 @@ def scan(i):
 	string = ""
     return string
 
-def run():
+def serverFunction():
+    
+    os.chdir("RubiksCube-TwophaseSolver-master/")
+    os.system("python3 run_two_phase_alg.py")
+
+
+def runCube():
+        
 	with picamera.PiCamera() as camera:
-	camera.start_preview()    
-	usart.write(scan(0)) #send first move
+            camera.start_preview()    
+            usart.write(scan(0)) #send first move
 
-	for i in range(6):        
-		read_data = usart.readline() #wait for massage
-		#print(read_data)
-		while(read_data != "Done"):
-			if(read_data == "Ready"):
-				usart.write("R")
-				read_data = usart.readline() #wait for massage 
-				while(read_data != "Start"):
-					read_data = usart.readline() #wait for massage "Start"
-				usart.write(scan(0))
-				i = 0
-				color_arr = [(0, 0, 0)for x in range(54)]
-			read_data = usart.readline() #wait for massage 'Done'
+            for i in range(6):        
+                    read_data = usart.readline() #wait for massage
+                    #print(read_data)
+                    while(read_data != "Done"):
+                            if(read_data == "Ready"):
+                                    usart.write("R")
+                                    read_data = usart.readline() #wait for massage 
+                                    while(read_data != "Start"):
+                                            read_data = usart.readline() #wait for massage "Start"
+                                    usart.write(scan(0))
+                                    i = 0
+                                    color_arr = [(0, 0, 0)for x in range(54)]
+                            read_data = usart.readline() #wait for massage 'Done'
 
-		time.sleep(2)
-		#take a picture
-		camera.capture("img.jpg")
-		image = cv2.imread("img.jpg")
+                    time.sleep(2)
+                    #take a picture
+                    camera.capture("img.jpg")
+                    image = cv2.imread("img.jpg")
 
-		#send next move to stm
-		usart.write(scan(i+1))
-		
-		#get colors from picture
-		color = detect.getColorsFromPic(image)
-		saveToArr(color, i)
-	camera.stop_preview()
+                    #send next move to stm
+                    usart.write(scan(i+1))
+                    
+                    #get colors from picture
+                    color = detect.getColorsFromPic(image)
+                    saveToArr(color, i)
+            camera.stop_preview()
 	
+        
+        
 	#classify readed colors
 	string = classify.classify(color_arr)
 	
 	#send string of state to Kociemba's algorithm
-	''' Zavolat algoritmus na vypocet tahu
-	order = 
+        with tmpfile.TemporaryFile() as tmpf:
+            subp = subprocess.Popen(['echo', string , '| localhost 8080'], stdout=tmpf)
+            subp.wait()
+            tmpf.seek(0)
+            order = tmpf.read()
+	
 	commands = ref.refactor(order)
 
+        print(commands)
+    
 	#send solution to stm
 	usart.write(commands)
-	'''
-
+	
+t = Thread(target = serverFunction)
+t.setDaemon(True)
+t.start()
 
 #starts UART communication
 usart = serial.Serial("/dev/ttyAMA0")
@@ -82,8 +103,11 @@ usart.write("R")#send ready to stm
 
 #start server for solution 
 while(1):
+        
 	read_data = usart.readline() #wait for massage 
 	if(read_data == "Ready"):
 		usart.write("R")
 	if(read_data == "Start"):
-		run()
+        		runCube()
+        
+        runCube()
