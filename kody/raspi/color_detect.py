@@ -198,9 +198,8 @@ def getColorsFromPic(im):
                 cv2.circle(obr, position, 1, 220, -1)
             return sort(arr)
 
-
+        image = im
 	points = [[0 for x in range(2)]for y in range(9)]
-	image = im
 	small = cv2.resize(image, (0,0), fx=0.15, fy=0.15)
         height, widith, ch = small.shape
         if height < widith:
@@ -225,26 +224,28 @@ def getColorsFromPic(im):
        
 	height, widith = filtr.shape
         points = findPoints(filtr, height, widith)
+        '''
 	point = check(points)
-	
+        	
 	#runs check of the shape of points given
 	while point != (0, 0):	
 		cv2.circle(filtr, point, 5, 255, -1)
                 cv2.circle(filtr, point, 1, 220, -1) 
         	points = findPoints(filtr, height, widith)
 		point = check(points)
-	
+        '''	
 	#reads BGR on given coordinate
 	color = [0 for x in range(9)]
         for i in range(0,9):
             b, g, r = img_bgr[points[i][1], points[i][0]]
             color[i] = (b, g, r)
-            b = int(b)
-            g = int(g)
-            r = int(r)
-            position = (points[i][0], points[i][1])
-            cv2.circle(img_bgr, position, 3, (0, 0, 0), -1)
-	    cv2.circle(img_bgr, position, 2, (b, g, r), -1)
-
+            #b = int(b)
+            #g = int(g)
+            #r = int(r)
+            #position = (points[i][0], points[i][1])
+            #cv2.circle(img_bgr, position, 3, (0, 0, 0), -1)
+	    #cv2.circle(img_bgr, position, 2, (b, g, r), -1)
+        #cv2.imshow("im", img_bgr)
+        #cv2.waitKey(0)
 	return color
 

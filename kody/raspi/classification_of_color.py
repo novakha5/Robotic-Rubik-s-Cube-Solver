@@ -40,7 +40,7 @@ def classify(read_array):
                 nearest = classified_array[i]
         return nearest
 
-    classified_array=[None]*54
+    classified_array=[None]*55
 
     learn()
     
@@ -132,6 +132,8 @@ def classify(read_array):
 
     for i in range(45, 54):
         send_str = send_str + classified_array[i]
-
+    string2 = '\n'
+    send_str = send_str + string2
+    #print(send_str)
     return send_str
 
