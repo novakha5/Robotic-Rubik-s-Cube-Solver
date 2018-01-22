@@ -37,18 +37,23 @@ RCC_ClocksTypeDef RCC_Clocks;
 
 /* Private function prototypes -----------------------------------------------*/
 static void Delay(__IO uint32_t nTime);
+static void InitializeSystemClock(void);
+static void InitializeGpio(void);
 static void InitializeTimersEtc(void);
 static void InitializeUsart(void);
 static void UsartSend(const char *src);
 /* Private functions ---------------------------------------------------------*/
 
 
+#define BUTTON_DEBOUNCE     10000
 
-#define MIN_TIMER_PERIOD    5000
+#define MIN_TIMER_PERIOD    10000
 #define MAX_TIMER_PERIOD    25000
 #define PULSE_WIDTH         (MIN_TIMER_PERIOD / 2)
-#define STEP_NUM						50
-#define DIST_STEP_NUM				65
+//#define STEP_NUM            50
+//#define DIST_STEP_NUM       65
+#define STEP_NUM            50
+#define DIST_STEP_NUM       65
 
 int TotalSteps[3] = {0, 0, 0}; //for every timer
 
@@ -62,11 +67,46 @@ char RxQueue[RX_QUEUE_SIZE] = {0, };
 int RxQueueReadIndex = 0;
 int RxQueueWriteIndex = 0;
 
-int button = 0;
 int done = 0;
 
-//inicialize  Timer1, Timer2, Timer3, their counters and GPIO for Direction of the motor
-//PWM compare and interrupts
+void InitializeSystemClock(void)
+{
+  RCC_GetClocksFreq(&RCC_Clocks);
+  SysTick_Config(RCC_Clocks.HCLK_Frequency / 100);
+  Delay(5);
+}
+
+void InitializeGpio(void) 
+{
+  GPIO_InitTypeDef GPIO_InitStructure;
+ 
+  /* LEDs */
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD | RCC_AHB1Periph_GPIOE, ENABLE);
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_15; //green + orange + blue LED
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
+  GPIO_Init(GPIOD, &GPIO_InitStructure);
+
+  GPIO_SetBits(GPIOD, GPIO_Pin_13); // orange LED on during boot
+
+  /*DRV sleep, reset*/
+  GPIO_ResetBits(GPIOE, GPIO_Pin_12); // set the pin low before starting to drive it
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
+  GPIO_Init(GPIOE, &GPIO_InitStructure);
+ 
+  /* User button */
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN;
+  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;  
+  GPIO_Init(GPIOA, &GPIO_InitStructure);
+}
+
+
+// Initialize Timer1, Timer2, Timer3, their counters and GPIO for Direction of the motor
+// PWM compare mode and interrupts are used
 void InitializeTimersEtc(void) 
 {
   GPIO_InitTypeDef        GPIO_InitStructure;
@@ -77,7 +117,7 @@ void InitializeTimersEtc(void)
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOE | RCC_AHB1Periph_GPIOA | RCC_AHB1Periph_GPIOC, ENABLE);
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2 | RCC_APB1Periph_TIM3, ENABLE);
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
-  	
+    
   /* GPIO STEP init for Timers */
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
@@ -113,13 +153,13 @@ void InitializeTimersEtc(void)
   GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8;
   GPIO_Init(GPIOA, &GPIO_InitStructure);
  
-	
-	 /* Time base configuration */
+  
+   /* Time base configuration */
   TIM_DeInit(TIM1);
   TIM_DeInit(TIM2);
   TIM_DeInit(TIM3);
   
-  TIM_TimeBaseInitStruct.TIM_Prescaler = 31;
+  TIM_TimeBaseInitStruct.TIM_Prescaler = 63;
   TIM_TimeBaseInitStruct.TIM_CounterMode = TIM_CounterMode_Up;
   TIM_TimeBaseInitStruct.TIM_Period = MAX_TIMER_PERIOD;
   TIM_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
@@ -146,14 +186,17 @@ void InitializeTimersEtc(void)
   TIM_OC1Init(TIM3, &TIM_OCInitStruct);
   TIM_OC3Init(TIM3, &TIM_OCInitStruct);  
 
-  /* Interrupts */
+  /* Interrupt requests */
   TIM_ITConfig(TIM1, TIM_IT_CC1, DISABLE);
   TIM_ITConfig(TIM1, TIM_IT_CC2, DISABLE);
   TIM_ITConfig(TIM2, TIM_IT_CC2, DISABLE);
   TIM_ITConfig(TIM2, TIM_IT_CC4, DISABLE);
   TIM_ITConfig(TIM3, TIM_IT_CC1, DISABLE);
   TIM_ITConfig(TIM3, TIM_IT_CC3, DISABLE);
-  
+  // The requests are disabled by default. 
+  // Each channel is enabled selectively.
+
+  /* Interrupt controller setup */
   NVIC_InitStructure.NVIC_IRQChannel = TIM1_CC_IRQn; //interrupt request
   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 8;
   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
@@ -175,9 +218,8 @@ void InitializeTimersEtc(void)
   TIM_CCxCmd(TIM3, TIM_Channel_1, TIM_CCx_Enable);
   TIM_CCxCmd(TIM3, TIM_Channel_3, TIM_CCx_Enable);
   
- /* TIM_Cmd(TIM1, ENABLE);
-  TIM_Cmd(TIM2, ENABLE);
-  TIM_Cmd(TIM3, ENABLE);*/
+  // At this point, the outputs are valid, timers are initialized but NOT running.
+  // The activation is done when commanded to via USART.
 }
 
 //inicialize GPIO pins for USART2 (RX - pin_6, TX - pin_5), USART2 itself and it's interrupts
@@ -189,7 +231,7 @@ void InitializeUsart(void)
   
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
-  	
+    
   /* GPIO init for USART */
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
@@ -238,55 +280,47 @@ void UsartSendChar(char data)
 
 void UsartSendInt(int data)
 {
-	char buffer[16] = {0, };
-	char *ptr = buffer+15;
-	if (data < 0) {
-		UsartSend("-");
-		data = -data;
-	}
+  char buffer[16] = {0, };
+  char *ptr = buffer+15;
+  if (data < 0) {
+    UsartSend("-");
+    data = -data;
+  }
   while (data > 0) {
-		*ptr = (data % 10) + '0';
-		data = data / 10;
-		--ptr;
-	}
-	if (ptr == buffer+15) {
-		*ptr = '0';
-		--ptr;
-	}
-	//UsartSend(ptr + 1);
+    *ptr = (data % 10) + '0';
+    data = data / 10;
+    --ptr;
+  }
+  if (ptr == buffer+15) {
+    *ptr = '0';
+    --ptr;
+  }
+  //UsartSend(ptr + 1);
 }
 
 //counts absolute value
 int abs(int value){
-	if (value < 0){
-		value = -value;
-	}
-	return value;
+  if (value < 0){
+    value = -value;
+  }
+  return value;
 }
-//sets speed of the motor based on the distance from begining to end (speed up and down)
+
+// sets speed of the motor based on the distance from begining to end (speed up and down)
 int SpeedCurve(int remainingSteps, int totalSteps)
 {
-  int x;
-  int count;
-  int absValue = abs((totalSteps/2) - remainingSteps);
-  if(totalSteps == 50){
-    x = totalSteps/5;
-  } else if (totalSteps < 100){
-    x = totalSteps/7;
-  } else {
-    x = totalSteps/10;
+  int distance = (totalSteps/2) - abs((totalSteps/2) - remainingSteps);
+  int step = 6 * ((int) MAX_TIMER_PERIOD - MIN_TIMER_PERIOD) / totalSteps;
+
+  int value = MAX_TIMER_PERIOD - step * distance;
+ 
+  if (value > MAX_TIMER_PERIOD) {
+    value = MAX_TIMER_PERIOD;
   }
-  if((remainingSteps > x) && (remainingSteps < (totalSteps - x))){
-    count = MIN_TIMER_PERIOD;
-  } else 
-	 count = (absValue * absValue * (20000/x)) + MIN_TIMER_PERIOD;
-	if (count > MAX_TIMER_PERIOD){
-		count = MAX_TIMER_PERIOD;
-	}
-	if (count < MIN_TIMER_PERIOD){
-		count = MIN_TIMER_PERIOD;
-	}
-	return count;
+  if (value < MIN_TIMER_PERIOD) {
+    value = MIN_TIMER_PERIOD;
+  }
+  return value;
 }
 
 //intecrrupt handler for TIM1 counting if the motor gets enough pulses and when send last it will disable timer1
@@ -295,9 +329,9 @@ void TIM1_CC_IRQHandler(void)
   RemainingSteps[0] -= 1;
   if (RemainingSteps[0] == 0) {
     TIM_Cmd(TIM1, DISABLE);
-		TIM_SetCompare1(TIM1, 0);
-		TIM_SetCompare2(TIM1, 0);
-		TotalSteps[0] = 0;
+    TIM_SetCompare1(TIM1, 0);
+    TIM_SetCompare2(TIM1, 0);
+    TotalSteps[0] = 0;
     TIM_ITConfig(TIM1, TIM_IT_CC1, DISABLE);
     TIM_ITConfig(TIM1, TIM_IT_CC2, DISABLE);
   }
@@ -312,9 +346,9 @@ void TIM2_IRQHandler(void)
   RemainingSteps[1] -= 1;
   if (RemainingSteps[1] == 0) {
     TIM_Cmd(TIM2, DISABLE);
-		TIM_SetCompare2(TIM2, 0);
-		TIM_SetCompare4(TIM2, 0);
-		TotalSteps[1] = 0;
+    TIM_SetCompare2(TIM2, 0);
+    TIM_SetCompare4(TIM2, 0);
+    TotalSteps[1] = 0;
     TIM_ITConfig(TIM2, TIM_IT_CC2, DISABLE);
     TIM_ITConfig(TIM2, TIM_IT_CC4, DISABLE);
   }
@@ -329,135 +363,125 @@ void TIM3_IRQHandler(void)
   RemainingSteps[2] -= 1;
   if (RemainingSteps[2] == 0) {
     TIM_Cmd(TIM3, DISABLE);
-		TIM_SetCompare1(TIM3, 0);
-		TIM_SetCompare3(TIM3, 0);
-		TotalSteps[2] = 0;
+    TIM_SetCompare1(TIM3, 0);
+    TIM_SetCompare3(TIM3, 0);
+    TotalSteps[2] = 0;
     TIM_ITConfig(TIM3, TIM_IT_CC1, DISABLE);
     TIM_ITConfig(TIM3, TIM_IT_CC3, DISABLE);    
   }
-  TIM_SetAutoreload(TIM3, SpeedCurve(RemainingSteps[2], TotalSteps[2]));
+  if(RemainingSteps[2] < 15){
+     TIM_SetAutoreload(TIM3, MAX_TIMER_PERIOD);
+  } else {
+    TIM_SetAutoreload(TIM3, SpeedCurve(RemainingSteps[2], TotalSteps[2]));
+  }
   TIM_ClearITPendingBit(TIM3, TIM_IT_CC1);
   TIM_ClearITPendingBit(TIM3, TIM_IT_CC3);
 }
 
 int isBufferEmpty(void){
-	__disable_irq();
-	int ret = 0;
-	if (RxQueueReadIndex == RxQueueWriteIndex){
-		ret = 1;
-	}
-	__enable_irq();
-	return ret;
+  __disable_irq();
+  int ret = 0;
+  if (RxQueueReadIndex == RxQueueWriteIndex){
+    ret = 1;
+  }
+  __enable_irq();
+  return ret;
 }
 
 int isBufferFull(void){
-	int ret = 0;
-	if (((RxQueueWriteIndex + 1) & RX_QUEUE_SIZE_MASK) == RxQueueReadIndex){
-		ret = 1;
-	}
-	return ret;
+  int ret = 0;
+  if (((RxQueueWriteIndex + 1) & RX_QUEUE_SIZE_MASK) == RxQueueReadIndex){
+    ret = 1;
+  }
+  return ret;
 }
 
 char readBuffer(){
-	if(isBufferEmpty()){
-		return 1;
-	}
-	__disable_irq();
-	char read = RxQueue[RxQueueReadIndex];
-	RxQueueReadIndex = (RxQueueReadIndex + 1) & RX_QUEUE_SIZE_MASK;
-	__enable_irq();
-	return read;
+  if(isBufferEmpty()){
+    return 1;
+  }
+  __disable_irq();
+  char read = RxQueue[RxQueueReadIndex];
+  RxQueueReadIndex = (RxQueueReadIndex + 1) & RX_QUEUE_SIZE_MASK;
+  __enable_irq();
+  return read;
 }
 
 int writeToBuffer(char data){
-	if (isBufferFull()){
-		while(1){}
-	}
-	RxQueue[RxQueueWriteIndex] = data;
+  if (isBufferFull()){
+    while(1){}
+  }
+  RxQueue[RxQueueWriteIndex] = data;
   RxQueueWriteIndex = (RxQueueWriteIndex + 1) & RX_QUEUE_SIZE_MASK;
-	return 0;
+  return 0;
 }
 
 void USART2_IRQHandler(void){
-	int data =  USART_ReceiveData(USART2);
-	writeToBuffer(data);
-	USART_ClearITPendingBit(USART2, USART_IT_RXNE);
+  int data =  USART_ReceiveData(USART2);
+  writeToBuffer(data);
+  USART_ClearITPendingBit(USART2, USART_IT_RXNE);
 }
 
 void clearBuffer(void){
-	__disable_irq();
-	RxQueueWriteIndex = 0;
-	RxQueueReadIndex = 0;
-	__enable_irq();
+  __disable_irq();
+  RxQueueWriteIndex = 0;
+  RxQueueReadIndex = 0;
+  __enable_irq();
+}
+
+void waitForUserButton(void)
+{
+  int button = 0;
+
+  // Power off motor drivers
+  GPIO_ResetBits(GPIOE, GPIO_Pin_12);   // disable
+
+  // indicate waiting via blue LED
+  GPIO_ResetBits(GPIOD, GPIO_Pin_12); // green off
+  GPIO_ResetBits(GPIOD, GPIO_Pin_13); // orange off
+  GPIO_SetBits(GPIOD, GPIO_Pin_15);   // blue on
+ 
+  while(button < BUTTON_DEBOUNCE) {
+    if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) == Bit_SET){
+      button++;
+    } else {
+      button--;
+    }
+    if(button < 0) {
+      button = 0;
+    }
+  }
+
+  // indicate the driver is operational via green LED
+  GPIO_ResetBits(GPIOD, GPIO_Pin_13); // orange off
+  GPIO_ResetBits(GPIOD, GPIO_Pin_15); // blue off
+  GPIO_SetBits(GPIOD, GPIO_Pin_12);   // green on
+
+  // Enable motor drivers
+  GPIO_SetBits(GPIOE, GPIO_Pin_12);   // enable
+  
+  // Ignore all commands that were received before the User button was pressed
+  clearBuffer();
+  UsartSend("\r\nStart\r\n");
 }
 
 int main(void)
 {
-  button = 0;
-  GPIO_InitTypeDef GPIO_InitStructure;
-  RCC_GetClocksFreq(&RCC_Clocks);
-  SysTick_Config(RCC_Clocks.HCLK_Frequency / 100);
-  Delay(5);
-  
-  /* LED */
-	
-  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD | RCC_AHB1Periph_GPIOE, ENABLE);
-  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12; //green
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;  
-  GPIO_Init(GPIOD, &GPIO_InitStructure);
-  
-  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_15; //blue
-  GPIO_Init(GPIOD, &GPIO_InitStructure);
-	
-	/*DRV sleep, reset*/
-	GPIO_ResetBits(GPIOE, GPIO_Pin_12);
-	GPIO_Init(GPIOE, &GPIO_InitStructure);
-	
-  /* User button */
-  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
-  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;  
-  GPIO_Init(GPIOA, &GPIO_InitStructure);
-      
+  /* Initialize peripherals */
+  InitializeSystemClock();
+  InitializeGpio();
   InitializeTimersEtc();
   InitializeUsart();
 
+  // Wait for the RasPi to boot
   UsartSend("\r\nReady\r\n");
-  
-  while(1){
-    if(isBufferEmpty()){
-    
-    }
-    else {
-      int data = readBuffer();
-      if(data == 'R'){
-        break;
-      }
-    }
+  while(isBufferEmpty() || readBuffer() != 'R') {
+      // do nothing
   }
   
-  GPIO_SetBits(GPIOE, GPIO_Pin_15);
+  // Wait until the user presses the Start (blue) button
+  waitForUserButton();
   
-	while(button != 10000){
-		if(GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) == Bit_SET){
-			button++;
-		} else {
-			button--;
-			if(button < 0){
-				button = 0;
-			}
-		}
-	}
-  button = 0;
-	clearBuffer();
-	UsartSend("\r\nStart\r\n");
-  GPIO_SetBits(GPIOE, GPIO_Pin_12);
-  GPIO_ResetBits(GPIOE, GPIO_Pin_15);
-	
   /* Infinite loop */
   while (1){
     if (USART_GetFlagStatus(USART2, USART_FLAG_NE) == SET) {
@@ -471,10 +495,10 @@ int main(void)
     }
     if (!isBufferEmpty()) {
       int data = readBuffer();
-			GPIO_SetBits(GPIOD, GPIO_Pin_12);
+      GPIO_SetBits(GPIOD, GPIO_Pin_12);
       switch (data) {
         case ' ':
-				case '\r':
+        case '\r':
           // Reset timer counter values
           TIM_SetCounter(TIM1, PULSE_WIDTH + 1);
           TIM_SetCounter(TIM2, PULSE_WIDTH + 1);
@@ -490,118 +514,100 @@ int main(void)
             RemainingSteps[2] = TotalSteps[2];
             TIM_Cmd(TIM3, ENABLE);
           }
-					while(RemainingSteps[0] != 0 || RemainingSteps[1] != 0 || RemainingSteps[2] != 0){
-				 		//wait
-					}
+          while(RemainingSteps[0] != 0 || RemainingSteps[1] != 0 || RemainingSteps[2] != 0){
+            //wait
+          }
           UsartSend("\r\nDone\r\n");
           Delay(10);
           break;
         case 'A':
           TIM_SetCompare1(TIM1, PULSE_WIDTH); // left motor will STEP
           GPIO_ResetBits(GPIOE, GPIO_Pin_13); // forward DIR
-          TotalSteps[0] = STEP_NUM;						// 90° angle
+          TotalSteps[0] = STEP_NUM;           // 90° angle
           TIM_ITConfig(TIM1, TIM_IT_CC1, ENABLE);
-					break;
+          break;
         case 'a':
           TIM_SetCompare1(TIM1, PULSE_WIDTH); // left motor will STEP          
           GPIO_SetBits(GPIOE, GPIO_Pin_13);   // reverse DIR
           TotalSteps[0] = STEP_NUM;           // 90° angle
           TIM_ITConfig(TIM1, TIM_IT_CC1, ENABLE);
-					break;
-				case 'B':
+          break;
+        case 'B':
           TIM_SetCompare2(TIM1, PULSE_WIDTH); // right motor will STEP
           GPIO_ResetBits(GPIOE, GPIO_Pin_14); // forward DIR
           TotalSteps[0] = STEP_NUM;           // 90° angle
           TIM_ITConfig(TIM1, TIM_IT_CC2, ENABLE);
-					break;
-				case 'b':
+          break;
+        case 'b':
           TIM_SetCompare2(TIM1, PULSE_WIDTH); // right motor will STEP
           GPIO_SetBits(GPIOE, GPIO_Pin_14);   // reverse DIR
           TotalSteps[0] = STEP_NUM;           // 90° angle
           TIM_ITConfig(TIM1, TIM_IT_CC2, ENABLE);
-					break;
-				case 'C':
+          break;
+        case 'C':
           TIM_SetCompare2(TIM2, PULSE_WIDTH); // up motor will STEP
           GPIO_ResetBits(GPIOC, GPIO_Pin_2);  // forward DIR
           TotalSteps[1] = STEP_NUM;           // 90° angle
           TIM_ITConfig(TIM2, TIM_IT_CC2, ENABLE);
-					break;
-				case 'c':
+          break;
+        case 'c':
           TIM_SetCompare2(TIM2, PULSE_WIDTH); // up motor will STEP
           GPIO_SetBits(GPIOC, GPIO_Pin_2);    // reverse DIR
           TotalSteps[1] = STEP_NUM;           // 90° angle
           TIM_ITConfig(TIM2, TIM_IT_CC2, ENABLE);
-					break;
-				case 'D':
+          break;
+        case 'D':
           TIM_SetCompare4(TIM2, PULSE_WIDTH); // down motor will STEP
           GPIO_ResetBits(GPIOA, GPIO_Pin_2);  // forward DIR
           TotalSteps[1] = STEP_NUM;           // 90° angle
           TIM_ITConfig(TIM2, TIM_IT_CC4, ENABLE);
-					break;
-				case 'd':
+          break;
+        case 'd':
           TIM_SetCompare4(TIM2, PULSE_WIDTH); // down motor will STEP
           GPIO_SetBits(GPIOA, GPIO_Pin_2);    // reverse DIR
           TotalSteps[1] = STEP_NUM;           // 90° angle  
           TIM_ITConfig(TIM2, TIM_IT_CC4, ENABLE);
-					break;
-				case 'E':
+          break;
+        case 'E':
           TIM_SetCompare1(TIM3, PULSE_WIDTH); // horizontal motor will STEP
           GPIO_ResetBits(GPIOC, GPIO_Pin_9);  // forward DIR
           TotalSteps[2] = DIST_STEP_NUM;           // 90° angle
           TIM_ITConfig(TIM3, TIM_IT_CC1, ENABLE);
-					break;
-				case 'e':
+          break;
+        case 'e':
           TIM_SetCompare1(TIM3, PULSE_WIDTH); // horizontal motor will STEP
           GPIO_SetBits(GPIOC, GPIO_Pin_9);    // reverse DIR
           TotalSteps[2] = DIST_STEP_NUM;           // 90° angle
           TIM_ITConfig(TIM3, TIM_IT_CC1, ENABLE);
-					break;
+          break;
         case 'F':
           TIM_SetCompare3(TIM3, PULSE_WIDTH); // vertical motor will STEP
           GPIO_ResetBits(GPIOA, GPIO_Pin_8);  // forward DIR
           TotalSteps[2] = DIST_STEP_NUM;           // 90° angle
           TIM_ITConfig(TIM3, TIM_IT_CC3, ENABLE);
-					break;
-				case 'f':
+          break;
+        case 'f':
           TIM_SetCompare3(TIM3, PULSE_WIDTH); // vertical motor will STEP
           GPIO_SetBits(GPIOA, GPIO_Pin_8);    // reverse DIR
           TotalSteps[2] = DIST_STEP_NUM;           // 90° angle  
           TIM_ITConfig(TIM3, TIM_IT_CC3, ENABLE);
           break;
-				case '2':
-					TotalSteps[0] = 2*TotalSteps[0];		//180° angle
-					TotalSteps[1] = 2*TotalSteps[1];
-					TotalSteps[2] = 2*TotalSteps[2];
-					break;
+        case '2':
+          TotalSteps[0] = 2*TotalSteps[0];    //180° angle
+          TotalSteps[1] = 2*TotalSteps[1];
+          TotalSteps[2] = 2*TotalSteps[2];
+          break;
         case 's':
-          TotalSteps[0] = TotalSteps[0]/10;		//small steps
-					TotalSteps[1] = TotalSteps[1]/10;
-					TotalSteps[2] = TotalSteps[2]/10;
+          TotalSteps[0] = TotalSteps[0]/10;   //small steps
+          TotalSteps[1] = TotalSteps[1]/10;
+          TotalSteps[2] = TotalSteps[2]/10;
           break;
         case '.':
-          done = 1;
-          UsartSend("\r\nCompleate\r\n"); 
+          UsartSend("\r\nComplete\r\n"); 
+          waitForUserButton();
           break;
         default:
           UsartSend("\r\nIgnoring unknown command\r\n");
-      }
-    } else {
-      if(done == 1){
-        GPIO_ResetBits(GPIOE, GPIO_Pin_12);
-        while(button != 10000){
-          if(GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) == Bit_SET){
-            button++;
-          } else {
-            button--;
-            if(button < 0){
-              button = 0;
-            }
-          }
-         }
-        GPIO_SetBits(GPIOE, GPIO_Pin_12);
-        clearBuffer();
-        UsartSend("\r\nStart\r\n");
-        done = 0; 
       }
     }
   }
