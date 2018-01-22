@@ -7,8 +7,8 @@ import serial
 import time
 import os
 from threading import Thread
-import subprocess
-import tempfile
+import socket
+import sys
 
 def saveToArr(color, j):
     for i in range(9):
@@ -19,19 +19,19 @@ color_arr = [(0, 0, 0)for x in range(54)]
 #sequence of moves for scanning cube
 def scan(i):
     if i == 0:
-	string = "e cD "
+	string = "E cD "
     elif i == 1:
 	string = "cD2 "
     elif i == 2:
-	string = "cD E aB "
+	string = "cD e F Ab "
     elif i == 3:
-	string = "aB2 "
+	string = "Ab2 "
     elif i == 4:
-	string = "aB F e aB E f "
+	string = "Ab f E Ab e F "
     elif i == 5:
-	string = "aB2 "
+	string = "Ab2 "
     else:
-	string = ""
+	string = "aB2 f E Ab e "
     return string
 
 def serverFunction():
@@ -47,51 +47,58 @@ def runCube():
             usart.write(scan(0)) #send first move
 
             for i in range(6):        
+                    #camera.start_preview()
                     read_data = usart.readline() #wait for massage
                     #print(read_data)
+                    read_data = read_data.strip()
+                    print("in for: {0}").format(read_data)
                     while(read_data != "Done"):
                             if(read_data == "Ready"):
                                     usart.write("R")
-                                    read_data = usart.readline() #wait for massage 
-                                    while(read_data != "Start"):
-                                            read_data = usart.readline() #wait for massage "Start"
-                                    usart.write(scan(0))
-                                    i = 0
-                                    color_arr = [(0, 0, 0)for x in range(54)]
+                                    camera.stop_preview()
+                                    return
                             read_data = usart.readline() #wait for massage 'Done'
-
+                            read_data = read_data.strip()
+                            print("in while: {0}").format(read_data)
                     time.sleep(2)
                     #take a picture
                     camera.capture("img.jpg")
                     image = cv2.imread("img.jpg")
-
+                    #camera.stop_preview()
                     #send next move to stm
                     usart.write(scan(i+1))
                     
                     #get colors from picture
                     color = detect.getColorsFromPic(image)
                     saveToArr(color, i)
+                    print(color)
             camera.stop_preview()
-	
-        
         
 	#classify readed colors
 	string = classify.classify(color_arr)
-	
+        print(string)	
 	#send string of state to Kociemba's algorithm
-        with tmpfile.TemporaryFile() as tmpf:
-            subp = subprocess.Popen(['echo', string , '| localhost 8080'], stdout=tmpf)
-            subp.wait()
-            tmpf.seek(0)
-            order = tmpf.read()
-	
-	commands = ref.refactor(order)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_address = ('localhost', 8080)
+        sock.connect(server_address)
+
+        try:
+            sock.sendall(string)
+            data = sock.recv(128)
+
+        finally:
+            sock.close()
+        
+        #print(data)
+        #raw_input()
+
+	commands = ref.refactor(data)
 
         print(commands)
     
 	#send solution to stm
 	usart.write(commands)
-	
+
 t = Thread(target = serverFunction)
 t.setDaemon(True)
 t.start()
@@ -105,9 +112,9 @@ usart.write("R")#send ready to stm
 while(1):
         
 	read_data = usart.readline() #wait for massage 
-	if(read_data == "Ready"):
+        read_data = read_data.strip()
+        #print("nacteno: {0}").format(read_data)
+        if(read_data == "Ready"):
 		usart.write("R")
 	if(read_data == "Start"):
-        		runCube()
-        
-        runCube()
+        	runCube()
